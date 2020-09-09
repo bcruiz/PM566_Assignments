@@ -1,0 +1,178 @@
+---
+title: "Assignment 01"
+author: "Brandyn Ruiz"
+date: "9/8/2020"
+output: html_document
+---
+
+```{r, message=FALSE, warning=FALSE}
+library(data.table)
+library(dplyr)
+library(lubridate)
+library(leaflet)
+library(pals)
+library(ggplot2)
+```
+
+```{r}
+aqi2004 <- data.table::fread('C:/Users/Brandyn Ruiz/OneDrive/USC/PM566/Assignment1/aqi2004.csv')
+dim(aqi2004)
+names(aqi2004)
+str(aqi2004)
+head(aqi2004)
+tail(aqi2004)
+```
+In our 2004 dataset we have 19233 observations with 20 variables.
+
+```{r}
+aqi2019 <- data.table::fread('C:/Users/Brandyn Ruiz/OneDrive/USC/PM566/Assignment1/aqi2019.csv')
+dim(aqi2019)
+names(aqi2019)
+str(aqi2019)
+head(aqi2019)
+tail(aqi2019)
+```
+In our 2019 dataset we have 53328 observations with 20 variables. There are more records in 2019 than there are in 2004 and could possibly be due to more sites.
+
+```{r message=FALSE}
+join <- full_join(aqi2004, aqi2019)
+head(join)
+tail(join)
+```
+
+```{r}
+join$Date <- as.Date(join$Date, "%m/%d/%Y")
+join <- join %>%
+  mutate(Year = year(join$Date))
+head(join$Year)
+
+names(join)[5] <- 'PM2.5'
+names(join)[8] <- 'SiteName'
+names(join)[19] <- 'lat'
+names(join)[20] <- 'lon'
+names(join)
+```
+
+```{r}
+pal <- colorNumeric(c('red', 'blue'), c(2004, 2019))
+# pal(join$Year)
+
+leaflet(join)%>%
+  addProviderTiles('OpenStreetMap')%>%
+  addCircles(lat=~lat, lng=~lon, opacity = 1, fillOpacity = 1, radius = 100, color = ~pal(Year))
+
+```
+There are significantly more testing sites in the year 2019. Majority of the testing sites are clustered within bigger cities throughout California, but there are still some recording sites all throughout the state as well.
+
+```{r}
+sum(is.na(join$PM2.5))
+sum(join$PM2.5 < 0)
+sum(join$PM2.5 < 0) / nrow(join)
+```
+From our dataset we have no missing values for the daily mean concentration of PM 2.5, but we do have 293 values that are below 0. For microparticles floating in the air a mean concentration below 0 does not make sense as the minimal value would be 0. Finding the proportion of values of PM 2.5 being reported less than 0 over the total amount of records is relatively small being less than 0.5%.
+
+```{r}
+#State Level
+ggplot(join, aes(STATE, PM2.5, fill = factor(Year)))+
+  geom_boxplot()+
+  labs(title = 'Boxplot of PM 2.5 concentration within California', x = 'State',
+       fill = 'Year')
+```
+
+From comparing the two years within California we see that 2004 has more extraneous outliers compared to 2019 as well as a significantly higher range.
+
+```{r}
+#State Level
+ggplot(subset(join, Year == 2004), aes(x = Date, y = PM2.5))+
+  geom_line()+
+  labs(title = 'Time Series of PM 2.5 in 2004')
+
+ggplot(subset(join, Year == 2019), aes(x = Date, y = PM2.5))+
+  geom_line()+
+  labs(title = 'Time Series of PM 2.5 in 2019')
+```
+
+In our time series visualization in the year 2004 we see that there is an unusual spike on PM 2.5 concentration within July-August reaching the highest at 250. However, the conentration tends to be in a cyclical pattern rising and falling with spikes every quarter of the year. The 2019 concentration of PM 2.5 for the state of california follows the same type of trend with cyclical patterns but with many spikes towards the last quarter of the year, with the largest spike in October reaching just above 120.
+
+```{r, message=FALSE, warning=FALSE}
+#State Level
+join %>%
+  group_by(Year)%>%
+  summarise(min = min(PM2.5), mean = mean(PM2.5), max = max(PM2.5),
+            quantile = quantile(PM2.5, c(0.25, 0.50, 0.75)), q = c(0.25, 0.50, 0.75))
+```
+
+From the state level in California we see that in 2004 there are much higher concnetrations of PM 2.5 compared to the PM 2.5 concentrations in the year 2019. As the range of concentrations is significantly higher in 2004 at a little over 10 in PM 2.5 at the 3rd quantile compared to 2019's concentration increase of 6 at the 3rd quantile. From this there is a decrease in the concentration of PM 2.5 from 2004 to 2019 overall in the state of California.
+
+```{r}
+#County Level, Los Angeles County
+countyLA <- join %>%
+  filter(COUNTY == 'Los Angeles')
+head(countyLA)
+
+ggplot(countyLA, aes(COUNTY, PM2.5, fill = factor(Year)))+
+  geom_boxplot()+
+  labs(title = 'Boxplot of PM 2.5 concentrations in LA county in 2004 and 2019', x = 'County'
+       , fill = 'Year')
+```
+
+Comparing the PM 2.5 concentrations in LA county between 2004 and 2019 there are higher concentrations within 2004 as their quantiles are greater than the quantiles in 2019. However, in 2019 has the more extranoues outliers with the greatest being 120.
+
+```{r}
+#County Level, Los Angeles County
+ggplot(subset(countyLA, Year == 2004), aes(x = Date, y = PM2.5))+
+  geom_line()+
+  labs(title = 'Time Series of PM 2.5 in LA county for 2004')
+
+ggplot(subset(countyLA, Year == 2019), aes(x = Date, y = PM2.5))+
+  geom_line()+
+  labs(title = 'Time Series of PM 2.5 in LA county for 2019')
+```
+
+From our time series visual we see a closer look of the concentrations between 2004 and 2019 as in 2004 the range is just above 60 compared to 2019's range being mostly under a concentration just under 25. Both years follow a cyclical pattern but 2004 has the more growing spikes of PM 2.5. The two outliers in 2019 distort our visual as the spread of the concentration is rather consistant and much lower than the concentrations in 2004.
+
+```{r, message=FALSE}
+#County Level, Los Angeles County
+countyLA %>%
+  group_by(Year)%>%
+  summarise(min = min(PM2.5), mean = mean(PM2.5), max = max(PM2.5),
+            quantile = quantile(PM2.5, c(0.25, 0.50, 0.75)), q = c(0.25, 0.50, 0.75))
+```
+From our summary statistics we se that in 2004 the max concentration is much lower than 2019's maximum but 2004 has the greatest range within its quantiles. From this there is a decrease in PM 2.5 concentrations from 2004 to 2019 at the Los Angeles county level.
+
+```{r}
+#Site Level, Los Angeles
+site <- join %>%
+  filter(SiteName == "Los Angeles-North Main Street")
+head(site, 12)
+
+ggplot(site, aes(SiteName, PM2.5, fill = factor(Year)))+
+  geom_boxplot()+
+  labs(title = 'Boxplot of PM 2.5 concentrations in LA site in 2004 and 2019', x = 'Site Name',
+       fill = 'Year')
+```
+
+With out boxplot for the LA site we see that the concentration for PM 2.5 has greater values in 2004 as the quatiles are significantly greater than the quantiles in 2019. In 2004 there are also more extraneous outliers with the greatest being aorund 75.
+
+```{r}
+#Site Level, Los Angeles
+ggplot(subset(site, Year == 2004), aes(x = Date, y = PM2.5))+
+  geom_line()+
+  labs(title = 'Time Series of PM 2.5 in LA site for 2004')
+
+ggplot(subset(site, Year == 2019), aes(x = Date, y = PM2.5))+
+  geom_line()+
+  labs(title = 'Time Series of PM 2.5 in LA site for 2019')
+```
+
+In our time series visual we see that the PM 2.5 concentration in 2004 is well spread with the highest peak happening in March and then again in October. Both years follow a cyclical pattern, but in 2019 has a tighter cyclical pattern with sharper lines meaning the PM 2.5 concentration changes rapidly in each day in the LA site for 2019. The greatest peak in 2019 happens in September being greater than 43.
+
+```{r, message=FALSE}
+#Site Level, Los Angeles
+join %>%
+  filter(SiteName == "Los Angeles-North Main Street")%>%
+  group_by(Year)%>%
+  summarise(min = min(PM2.5), mean = mean(PM2.5), max = max(PM2.5),
+            quantile = quantile(PM2.5, c(0.25, 0.50, 0.75)), q = c(0.25, 0.50, 0.75))  
+```
+From our summary statistics we see that 2004 has the greatest range for its concentration quantile is much greater than 2019's. We see that there is a decrease of the concentration of PM 2.5  from 2004 to 2019 at the Los Angeles site level.
